@@ -3,7 +3,7 @@ import { ref, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTitle } from '@vueuse/core'
 import { ElForm, ElFormItem, ElInput, ElButton, ElAlert } from 'element-plus'
-import { Lock, User, Monitor } from '@element-plus/icons-vue'
+import { Lock,  Monitor, Message } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 
 useTitle('登录 - DevDeck')
@@ -14,15 +14,15 @@ const router = useRouter()
 
 // 表单数据
 const loginForm = reactive({
-  username: '',
+  email: '',
   password: ''
 })
 
 // 表单验证规则
 const rules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度应为3-20个字符', trigger: 'blur' }
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { min: 3, max: 20, message: '请输入正确的邮箱格式', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -103,12 +103,12 @@ async function handleLogin() {
         :rules="rules"
         class="mt-8 space-y-6 bg-white p-8 rounded-xl shadow-lg backdrop-blur-sm bg-opacity-80 border border-gray-100 transition-all duration-300 hover:shadow-xl"
       >
-        <ElFormItem prop="username" class="mb-6">
+        <ElFormItem prop="email" class="mb-6">
           <ElInput
-            v-model="loginForm.username"
-            :prefix-icon="User"
-            placeholder="用户名"
-            autocomplete="username"
+            v-model="loginForm.email"
+            :prefix-icon="Message"
+            placeholder="邮箱"
+            autocomplete="email"
             class="rounded-lg"
           />
         </ElFormItem>

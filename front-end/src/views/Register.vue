@@ -20,6 +20,7 @@ const registerForm = reactive({
   password: "",
   confirmPassword: "",
   captcha: "",
+  emailCode: "", // 邮箱验证码
 });
 
 // 表单验证规则
@@ -53,14 +54,22 @@ const rules = reactive<FormRules>({
     { required: true, message: "请输入验证码", trigger: "blur" },
     { min: 4, max: 4, message: "请输入4位验证码", trigger: "blur" },
   ],
+  emailCode: [
+    { required: true, message: "请输入邮箱验证码", trigger: "blur" },
+    { min: 6, max: 6, message: "请输入6位邮箱验证码", trigger: "blur" },
+  ],
 });
 
 const formRef = ref<InstanceType<typeof ElForm> | null>(null);
 const isSubmitting = ref(false);
 const error = ref<string | null>(null);
-  const captchaUrl = ref<string>('')
+const captchaUrl = ref<string>('')
+const isSendingEmailCode = ref(false);
+const emailCodeCountdown = ref(0);
+const emailCodeButtonText = ref('获取邮箱验证码');
+const showEmailCodeField = ref(false); // 控制是否显示邮箱验证码字段
 
-  async function fetchCaptcha() {
+async function fetchCaptcha() {
   try {
     console.log('Fetching captcha...');
 
@@ -85,6 +94,81 @@ const error = ref<string | null>(null);
     }
   }
 }
+
+// 验证图形验证码并发送邮箱验证码
+async function verifyCaptchaAndSendEmailCode() {
+  // 验证邮箱格式
+  const emailRule = rules.email[1] as { type: string; message: string; trigger: string };
+  const emailValidator = new RegExp(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+  
+  if (!registerForm.email) {
+    ElMessage.error('请先输入邮箱地址');
+    return;
+  }
+  
+  if (!emailValidator.test(registerForm.email)) {
+    ElMessage.error(emailRule.message);
+    return;
+  }
+  
+  if (!registerForm.captcha) {
+    ElMessage.error('请先输入图形验证码');
+    return;
+  }
+  
+  try {
+    isSendingEmailCode.value = true;
+    
+    // 先验证图形验证码
+    const verifyResponse = await httpClient.post('/user/verify-captcha', {
+      captcha: registerForm.captcha
+    });
+    
+    if (verifyResponse && verifyResponse.code === 0) {
+      // 图形验证码验证通过，发送邮箱验证码
+      const response = await httpClient.post('/user/verification-code', {
+        email: registerForm.email
+      });
+      
+      if (response && response.code === 0) {
+        ElMessage.success('验证码已发送到您的邮箱');
+        showEmailCodeField.value = true; // 显示邮箱验证码输入框
+        
+        // 开始倒计时
+        emailCodeCountdown.value = 60;
+        const timer = setInterval(() => {
+          emailCodeCountdown.value--;
+          emailCodeButtonText.value = `${emailCodeCountdown.value}秒后重新获取`;
+          
+          if (emailCodeCountdown.value <= 0) {
+            clearInterval(timer);
+            emailCodeButtonText.value = '获取邮箱验证码';
+          }
+        }, 1000);
+      } else {
+        throw new Error(response?.message || '发送验证码失败');
+      }
+    } else {
+      // 图形验证码验证失败
+      throw new Error(verifyResponse?.message || '图形验证码验证失败');
+      // 刷新图形验证码
+      fetchCaptcha();
+    }
+  } catch (err) {
+    console.error('Error in verification process:', err);
+    
+    if (err instanceof Error) {
+      ElMessage.error(`验证失败: ${err.message}`);
+    } else {
+      ElMessage.error('验证失败: 未知错误');
+    }
+    
+    // 刷新图形验证码
+    fetchCaptcha();
+  } finally {
+    isSendingEmailCode.value = false;
+  }
+}
 // 注册处理函数
 async function handleRegister() {
   if (!formRef.value) return;
@@ -100,10 +184,12 @@ async function handleRegister() {
         username: registerForm.username,
         email: registerForm.email,
         password: registerForm.password,
+        emailCode: registerForm.emailCode, // 添加邮箱验证码
       });
 
       // 注册成功后跳转到登录页面
       router.push("/login");
+      ElMessage.success('注册成功！请登录您的账户');
     } catch (err: any) {
       error.value = err.message || "注册过程中发生错误";
     } finally {
@@ -204,11 +290,11 @@ async function handleRegister() {
           />
         </ElFormItem>
 
-        <ElFormItem prop="captcha" class="mb-6">
+        <ElFormItem prop="captcha" class="mb-5">
           <div class="flex items-center">
             <ElInput
               v-model="registerForm.captcha"
-              placeholder="验证码"
+              placeholder="图形验证码"
               class="flex-1 rounded-lg"
             />
             <img
@@ -218,6 +304,26 @@ async function handleRegister() {
               @click="fetchCaptcha"
             />
           </div>
+        </ElFormItem>
+        
+        <div class="mb-5 flex items-center">
+          <ElButton
+            type="primary"
+            class="w-full py-2 px-4 rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 transition-all duration-200"
+            :disabled="emailCodeCountdown.value > 0"
+            :loading="isSendingEmailCode"
+            @click="verifyCaptchaAndSendEmailCode"
+          >
+            {{ emailCodeButtonText }}
+          </ElButton>
+        </div>
+        
+        <ElFormItem v-if="showEmailCodeField" prop="emailCode" class="mb-6">
+          <ElInput
+            v-model="registerForm.emailCode"
+            placeholder="邮箱验证码"
+            class="rounded-lg"
+          />
         </ElFormItem>
         <div>
           <ElButton

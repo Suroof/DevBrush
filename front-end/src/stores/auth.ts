@@ -37,7 +37,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     
     try {
-      const data = await httpClient.post('/dev-deck/user/login', credentials)
+      const data = await httpClient.post('/user/login', credentials)
       token.value = data.token
       user.value = data.user
       
@@ -68,7 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     
     try {
-      const userData = await httpClient.get('/dev-deck/user/info')
+      const userData = await httpClient.get('/user/info')
       user.value = userData
     } catch (err: any) {
       error.value = err.message
@@ -87,7 +87,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     
     try {
-      await httpClient.post('/dev-deck/user/register', registerData)
+      await httpClient.post('/user/register', registerData)
       ElMessage.success('注册成功，请登录')
       return true
     } catch (err: any) {
