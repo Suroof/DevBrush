@@ -2,7 +2,7 @@
 import { ref, reactive } from "vue";
 import { useRouter } from "vue-router";
 import { useTitle } from "@vueuse/core";
-import { ElForm, ElMessage, ElFormItem, ElInput, ElButton, ElAlert, ElDivider } from "element-plus";
+import { ElForm, ElMessage, ElFormItem, ElInput, ElButton, ElAlert} from "element-plus";
 import type { FormRules } from "element-plus";
 import { Lock, User, Message, Monitor } from "@element-plus/icons-vue";
 import { useAuthStore } from "../stores/auth";
@@ -68,18 +68,25 @@ const isSendingEmailCode = ref(false);
 const emailCodeCountdown = ref(0);
 const emailCodeButtonText = ref('获取邮箱验证码');
 const showEmailCodeField = ref(false); // 控制是否显示邮箱验证码字段
-
+interface ApiResponse {
+  code: number;
+  message?: string; // 可选属性
+  data?: any; // 其他数据
+}
 async function fetchCaptcha() {
   try {
     console.log('Fetching captcha...');
 
     // 使用 POST 请求，并确保 httpClient 支持 POST
-    const response = await httpClient.post<{ data: string }>('/user/captcha', {});
-
+    const response = await httpClient.post<ApiResponse>('/user/captcha', {});
     console.log('Response:', response);
 
     if (response && response.data) {
-      captchaUrl.value = response.data;
+      // 获取 imageBase64 数据
+      const imageBase64 = response.data.imageBase64;
+
+      // 将 imageBase64 转换为 data URI 格式
+      captchaUrl.value = `data:image/png;base64,${imageBase64}`;
       console.log('Captcha URL set:', captchaUrl.value);
     } else {
       throw new Error('Invalid response format');
@@ -120,7 +127,7 @@ async function verifyCaptchaAndSendEmailCode() {
     isSendingEmailCode.value = true;
     
     // 先验证图形验证码
-    const verifyResponse = await httpClient.post('/user/verify-captcha', {
+    const verifyResponse = await httpClient.post<ApiResponse>('/user/verify-captcha', {
       captcha: registerForm.captcha
     });
     
@@ -155,20 +162,25 @@ async function verifyCaptchaAndSendEmailCode() {
       fetchCaptcha();
     }
   } catch (err) {
-    console.error('Error in verification process:', err);
-    
-    if (err instanceof Error) {
-      ElMessage.error(`验证失败: ${err.message}`);
-    } else {
-      ElMessage.error('验证失败: 未知错误');
-    }
-    
-    // 刷新图形验证码
-    fetchCaptcha();
-  } finally {
-    isSendingEmailCode.value = false;
+  console.error('Error in verification process:', err);
+
+  let errorMessage = '验证失败: 未知错误';
+
+  if (err instanceof Error) {
+    errorMessage = `验证失败: ${err.message}`;
+  } else if (typeof err === 'object' && err !== null && 'message' in err) {
+    errorMessage = `验证失败: ${(err as { message: string }).message}`;
   }
+
+  ElMessage.error(errorMessage);
+
+  // 刷新图形验证码
+  fetchCaptcha();
+} finally {
+  isSendingEmailCode.value = false;
 }
+}
+
 // 注册处理函数
 async function handleRegister() {
   if (!formRef.value) return;
@@ -184,15 +196,23 @@ async function handleRegister() {
         username: registerForm.username,
         email: registerForm.email,
         password: registerForm.password,
-        emailCode: registerForm.emailCode, // 添加邮箱验证码
+        code: registerForm.emailCode, // 添加邮箱验证码
       });
 
       // 注册成功后跳转到登录页面
       router.push("/login");
       ElMessage.success('注册成功！请登录您的账户');
-    } catch (err: any) {
-      error.value = err.message || "注册过程中发生错误";
-    } finally {
+    } catch (err: unknown) {
+  let errorMessage = "注册过程中发生错误";
+
+  if (err instanceof Error) {
+    errorMessage = err.message;
+  } else if (typeof err === 'object' && err !== null && 'message' in err) {
+    errorMessage = (err as { message: string }).message;
+  }
+
+  error.value = errorMessage;
+} finally {
       isSubmitting.value = false;
     }
   });
